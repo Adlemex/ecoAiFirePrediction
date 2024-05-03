@@ -9,7 +9,7 @@ df_common = pd.read_csv("common.csv")
 X_train, X_test, y_train, y_test = train_test_split(
     df_common[
         ["latitude", "longitude", "acq_day", "acq_month", "temperature", "humidity",
-         "vapour_pressure", "precipitation",
+         "vapour_pressure",
          "soil_moisture", "soil_temperature", "wind", "dew_point"]], df_common['frp'],
     test_size=0.33, random_state=42)
 perceptron: linear_model.GammaRegressor = linear_model.GammaRegressor().fit(X_train, y_train)
@@ -43,7 +43,7 @@ def get_conf_int(alpha, lr, X=X_train, y=y_train):
 
 def predict(data):
     test = pd.DataFrame([data], columns=["latitude", "longitude", "acq_day", "acq_month", "temperature", "humidity",
-                                         "vapour_pressure", "precipitation",
+                                         "vapour_pressure",
                                          "soil_moisture", "soil_temperature", "wind", "dew_point"])
     return perceptron.predict(test)[0]
 

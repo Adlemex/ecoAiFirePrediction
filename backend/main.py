@@ -1,19 +1,34 @@
+from datetime import datetime, timedelta
+
 import matplotlib
 import numpy
 import numpy as np
 from matplotlib.contour import QuadContourSet
 from mpl_toolkits.axes_grid1 import make_axes_locatable
 from mpl_toolkits.axes_grid1.inset_locator import inset_axes
+from openmeteo_requests.Client import OpenMeteoRequestsError
 
 import predict
 from utils import convert_time, plot_color_gradients
 
+forecast_url = "https://api.open-meteo.com/v1/forecast"
+previous_url = "https://archive-api.open-meteo.com/v1/archive"
 key = '0255e0228de18dd8232ab3bee2ba070a'
 #coords = [15, 41.2, 16, 42]
-coords = [15, 40, 17, 42]
+coords = [15, 40, 17, 42] # italy
+# coords = [42, 43, 46, 47] # russia
 # best coords = [15, 40, 17, 42]
-date = "2023-10-01"
-num_weather_points = 10
+date = "2022-08-08"
+parsed = datetime.fromisoformat(date)
+now = datetime.now()
+if now - parsed > timedelta(days=3):
+    future = False
+    url = previous_url
+else:
+    future = True
+    url = forecast_url
+# date = "2022-06-02"
+num_weather_points = 25
 import pandas as pd
 import geopandas
 import matplotlib.pyplot as plt
@@ -23,7 +38,6 @@ import requests_cache
 from retry_requests import retry
 from geodatasets import get_path
 import contextily as cx
-
 cache_session = requests_cache.CachedSession('.cache', expire_after=-1)
 retry_session = retry(cache_session, retries=5, backoff_factor=0.2)
 openmeteo = openmeteo_requests.Client(session=retry_session)
@@ -50,17 +64,21 @@ for i in range(num_weather_points):
 cords_array = [(lats[i], longs[i]) for i in range(num_weather_points**2)]
 temps = []
 for i in range(0, len(cords_array), num_weather_points):
-    url = "https://archive-api.open-meteo.com/v1/archive"
     params = {
         "latitude": [cords_array[i+j][0] for j in range(num_weather_points)],
         "longitude": [cords_array[i+j][1] for j in range(num_weather_points)],
         "start_date": {date},
         "end_date": {date},
-        "hourly": ["relative_humidity_2m", "soil_temperature_0_to_7cm", "soil_moisture_0_to_7cm",
+        "hourly": ["relative_humidity_2m",
+                   "soil_temperature_0cm" if future else "soil_temperature_0_to_7cm",
+                   "soil_moisture_0_to_1cm" if future else "soil_moisture_0_to_7cm",
                    "vapour_pressure_deficit", "temperature_2m", "precipitation", "wind_speed_10m", "dew_point_2m"],
         "daily": ["temperature_2m_max", "temperature_2m_mean", "precipitation_sum"]
     }
-    responses = openmeteo.weather_api(url, params=params)
+    try:
+        responses = openmeteo.weather_api(url, params=params)
+    except OpenMeteoRequestsError as e:
+        print(e.args[0])
     for response in responses:
         daily = response.Daily()
         hourly = response.Hourly()
@@ -83,7 +101,7 @@ for i in range(0, len(cords_array), num_weather_points):
             temperature,
             relative_humidity,
             pressure_of_vapour,
-            precipitation,
+            # precipitation,
             soil_moisture,
             soil_temperature,
             wind,
@@ -100,13 +118,15 @@ plt.style.use('_mpl-gallery-nogrid')
 X, Y = np.meshgrid(np.linspace(coords[0], coords[2], num_weather_points),
                    np.linspace(coords[1], coords[3], num_weather_points))
 Z = temps_n
-levels = np.linspace(Z.min(), Z.max(), 7)
+# levels = np.linspace(Z.max(), Z.min(), 7)
 ax = world.plot(figsize=(11, 10), alpha=0)
-contour = ax.contourf(X, Y, Z, alpha=0.6, cmap=matplotlib.colormaps["plasma"], levels=100)
+contour = ax.contourf(X, Y, Z, alpha=0.6, cmap=matplotlib.colormaps["plasma"], levels=50)
 ax.set_xlim([coords[0], coords[2]])
 ax.set_ylim([coords[1], coords[3]])
 ax.axis('off')
-gdf.plot(ax=ax, color="red", markersize=10)
+try:
+    gdf.plot(ax=ax, color="red", markersize=10)
+except ValueError: pass
 divider = make_axes_locatable(ax)
 cax1 = divider.append_axes("right", size="3%", pad=0.1)
 cbar = plt.colorbar(contour, ticks=[Z.min(), Z.max()], aspect=200, cax=cax1)

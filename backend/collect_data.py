@@ -4,8 +4,9 @@ import requests_cache
 from retry_requests import retry
 from utils import convert_time
 import openmeteo_requests
-
-df_area = pd.read_csv("2022-07-06-big2.csv")
+path = "2022-07-08.csv"
+df_area = pd.read_csv(path)
+# df_area = pd.read_csv("2022-07-06-big2.csv")
 df_area['acq_time'] = df_area['acq_time'].apply(convert_time)
 df_area['acq_month'] = df_area['acq_date'].apply(lambda date: int(date.split("-")[1]))
 df_area['acq_day'] = df_area['acq_date'].apply(lambda date: int(date.split("-")[2]))
@@ -55,4 +56,4 @@ df_area[['temperature', "humidity", "vapour_pressure", "precipitation", "soil_mo
                   result_type="expand"))
 print(df_area.head())
 
-df_area.to_csv("2022-07-06-big2-with-data.csv", index=False)
+df_area.to_csv( path + "-with-data.csv", index=False)

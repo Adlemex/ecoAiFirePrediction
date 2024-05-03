@@ -1,19 +1,15 @@
-import base64
 from io import BytesIO
+from typing import Literal
 
 import fastapi
-import numpy
 import numpy as np
 import pandas as pd
 import geopandas
 import matplotlib as mpl
 import matplotlib.pyplot as plt
 import uvicorn
-from cartopy import crs as ccrs
 import openmeteo_requests
 import requests_cache
-from matplotlib.backends.backend_agg import FigureCanvasAgg
-from matplotlib.figure import Figure
 from mpl_toolkits.axes_grid1 import make_axes_locatable
 from retry_requests import retry
 from geodatasets import get_path
@@ -22,6 +18,7 @@ from starlette.middleware.cors import CORSMiddleware
 from starlette.responses import StreamingResponse
 
 import predict
+import predict_russia
 
 app = fastapi.FastAPI()
 origins = [
@@ -40,9 +37,13 @@ app.add_middleware(
 )
 
 @app.get("/get_fires_predition")
-def get_fires(date_iso: str, accuracy:int=12):
+def get_fires(date_iso: str, accuracy:int=12, region: Literal['italy', 'russia'] = 'italy'):
     key = '0255e0228de18dd8232ab3bee2ba070a'
-    cords = [15, 40, 17, 42]
+    if region == 'russia':
+        cords = [42, 43, 46, 47]
+    else:
+        cords = [15, 40, 17, 42]
+    # cords = [43, 39, 47, 46]
     cache_session = requests_cache.CachedSession('.cache', expire_after=-1)
     retry_session = retry(cache_session, retries=5, backoff_factor=0.2)
     openmeteo = openmeteo_requests.Client(session=retry_session)
@@ -94,14 +95,13 @@ def get_fires(date_iso: str, accuracy:int=12):
             daily_temperature_2m_max = daily.Variables(0).ValuesAsNumpy().mean()
             daily_temperature_2m_mean = daily.Variables(1).ValuesAsNumpy().mean()
             daily_precipitation_sum = daily.Variables(2).ValuesAsNumpy().mean()
-            temps.append(predict.predict([
+            temps.append((predict_russia if region == 'russia' else predict).predict([
                 response.Latitude(),
                 response.Longitude(),
                 date_iso.split("-")[2], date_iso.split("-")[1],
                 temperature,
                 relative_humidity,
                 pressure_of_vapour,
-                precipitation,
                 soil_moisture,
                 soil_temperature,
                 wind,
@@ -135,4 +135,4 @@ def get_fires(date_iso: str, accuracy:int=12):
     return StreamingResponse(imgdata, media_type="image/png")
 
 if __name__ == "__main__":
-    uvicorn.run(app, host="0.0.0.0", port=9600, root_path=".")
+    uvicorn.run(app, host="0.0.0.0", port=9600, root_path="..")
